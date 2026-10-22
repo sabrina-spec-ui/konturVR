@@ -1,0 +1,1295 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0}</style></head><body><title>KonturVR</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: dua panel (data peta kontur | medan 3D), satu panel per layar di ponsel. Warna dari kertas peta, tinta survei, dan warna garis kontur. */
+:root{
+  --paper:#EDF1EE; --panel:#F8FAF8; --ink:#11262B; --muted:#576C6F; --rule:#CBD6D1;
+  --accent:#0A6C74; --accent-ink:#FFFFFF; --contour:#9A4E1B; --water:#2A78B0;
+  --sky:#D5E3E4; --map:#EFF0E6; --warn:#9B2C2C;
+  --f-ui:'Archivo',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0E1A1D; --panel:#142328; --ink:#E2EDEA; --muted:#8FA6A8; --rule:#274046;
+  --accent:#48C1C9; --accent-ink:#06262A; --contour:#D98A4E; --water:#4B9ED6;
+  --sky:#0B1417; --map:#12201C; --warn:#F08A8A; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --paper:#0E1A1D; --panel:#142328; --ink:#E2EDEA; --muted:#8FA6A8; --rule:#274046;
+  --accent:#48C1C9; --accent-ink:#06262A; --contour:#D98A4E; --water:#4B9ED6;
+  --sky:#0B1417; --map:#12201C; --warn:#F08A8A; color-scheme:dark;}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.5;margin:0;
+  padding-block:0 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input,select{font:inherit;color:inherit}
+h1,h2,h3{margin:0;font-weight:700;text-wrap:balance}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px 12px;max-width:1360px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;font-stretch:75%;font-weight:800;font-size:22px;letter-spacing:.02em}
+.brand svg{width:28px;height:28px;flex:none}
+.brand small{font-family:var(--f-mono);font-weight:400;font-size:11px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;display:none}
+.tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:3px}
+.tabs button{border:0;background:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:14px}
+.tabs button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.stage{max-width:1360px;margin:0 auto}
+.pane{min-width:0}
+@media (max-width:979px){
+  .stage[data-pane="data"] .pane-view{display:none}
+  .stage[data-pane="view"] .pane-data{display:none}
+}
+@media (min-width:980px){
+  .stage{display:grid;grid-template-columns:minmax(340px,5fr) 7fr;gap:24px;align-items:start}
+  .tabs{display:none}
+  .brand small{display:block}
+}
+.pane-data,.controls{display:flex;flex-direction:column;gap:14px}
+.sec-title{font-stretch:75%;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:14px;min-width:0}
+.seg{display:flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{flex:1;border:0;background:none;padding:8px 10px;cursor:pointer;font-weight:600;font-size:14px;border-right:1px solid var(--rule)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.btn{border:1px solid var(--rule);background:var(--panel);padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.lbl{font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.field input[type=number],.field input[type=text],.field select,input[type=file]{border:1px solid var(--rule);background:var(--paper);border-radius:6px;padding:7px 9px;min-width:0;width:100%;font-family:var(--f-mono);font-size:14px}
+select{font-family:var(--f-ui)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint{color:var(--muted);font-size:13px;margin:0}
+.msg{font-size:13px;margin:0;color:var(--muted);min-height:1.3em}
+.msg.err{color:var(--warn)}
+.mapbox{border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--map);min-width:0}
+#mapCv{display:block;cursor:crosshair;touch-action:manipulation}
+.stats{font-family:var(--f-mono);font-size:12px;color:var(--muted);padding:8px 12px;border-top:1px solid var(--rule)}
+.view{position:relative;height:clamp(320px,58vh,660px);border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--sky)}
+#glCv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.hud{position:absolute;left:10px;bottom:10px;font-family:var(--f-mono);font-size:12px;background:color-mix(in srgb,var(--panel) 82%,transparent);border:1px solid var(--rule);border-radius:6px;padding:4px 8px;pointer-events:none}
+.hud:empty{display:none}
+.glmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--muted)}
+.exitvr{display:none;position:absolute;top:max(8px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:3;border:1px solid rgba(255,255,255,.5);background:rgba(0,0,0,.45);color:#fff;border-radius:999px;padding:4px 14px;font-size:13px;cursor:pointer}
+body.vr .top,body.vr .pane-data,body.vr .controls,body.vr .legend,body.vr .pane-view>.sec-title{display:none}
+body.vr .stage{display:block;max-width:none}
+body.vr .pane-view{display:block!important}
+body.vr .view{position:fixed;inset:0;height:auto;border:0;border-radius:0;z-index:50;background:#000}
+body.vr .exitvr{display:block}
+body.vr .hud{display:none}
+body.vr{overflow:hidden}
+.legend{display:flex;align-items:center;gap:10px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.legend .bar{flex:1;height:10px;border-radius:5px;border:1px solid var(--rule)}
+.ctl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.ctl output{font-family:var(--f-mono);font-size:13px}
+.checks{display:flex;flex-wrap:wrap;gap:6px 18px}
+.checks label{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px}
+.checks input{accent-color:var(--accent);width:16px;height:16px}
+.controls .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+details{border:1px solid var(--rule);border-radius:10px;padding:10px 14px;background:var(--panel)}
+details summary{cursor:pointer;font-weight:600}
+details ol{margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:14px}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 22c3-9 8-14 14-14 6 0 10 4 12 8"/><path d="M8 24c2-6 6-10 10-10 4 0 6 3 7 6" stroke="var(--accent)"/><path d="M14 25c1-3 3-5 5-5"/></g></svg>
+    <span>KonturVR</span><small>Peta kontur ke medan 3D</small>
+  </div>
+  <nav class="tabs" id="paneTabs" aria-label="Tampilan">
+    <button type="button" data-pane="data" aria-pressed="true">Kontur</button>
+    <button type="button" data-pane="view" aria-pressed="false">Medan 3D</button>
+  </nav>
+</header>
+
+<main class="stage" id="stage" data-pane="data">
+  <section class="pane pane-data" id="paneData" aria-label="Peta kontur">
+    <div class="sec-title">Peta kontur</div>
+    <div class="seg" id="srcBtns" role="group" aria-label="Sumber peta">
+      <button type="button" data-src="sample" aria-pressed="true">Contoh</button>
+      <button type="button" data-src="image" aria-pressed="false">Gambar peta</button>
+      <button type="button" data-src="file" aria-pressed="false">Berkas vektor</button>
+    </div>
+
+    <div class="card" id="pSample">
+      <div class="field"><label for="sampleSel">Contoh medan</label><select id="sampleSel"></select></div>
+      <p class="hint" id="sampleDesc" style="margin-top:8px"></p>
+    </div>
+
+    <div class="card" id="pImage" hidden>
+      <div class="field"><label for="imgFile">Foto atau pindaian peta (JPG, PNG)</label><input type="file" id="imgFile" accept="image/*"></div>
+      <div class="row" style="margin-top:12px">
+        <div class="seg" style="flex:1;min-width:220px" role="group" aria-label="Alat">
+          <button type="button" id="toolTrace" aria-pressed="true">Telusuri garis</button>
+          <button type="button" id="toolCapture" aria-pressed="false">Tangkap warna</button>
+        </div>
+      </div>
+      <div class="grid2" style="margin-top:12px;align-items:end">
+        <div class="field"><label for="elevIn">Elevasi garis (m)</label><input type="number" id="elevIn" value="500" step="25"></div>
+        <div class="row"><button type="button" class="btn" id="elevDec" aria-label="Kurangi satu interval">&minus; interval</button><button type="button" class="btn" id="elevInc" aria-label="Tambah satu interval">+ interval</button></div>
+      </div>
+      <div class="field" id="tolRow" style="margin-top:12px" hidden><label for="tolIn">Toleransi warna</label><input type="range" id="tolIn" min="10" max="120" value="55" style="accent-color:var(--accent)"></div>
+      <p class="hint" id="imgHint" style="margin-top:10px"></p>
+      <div class="row" style="margin-top:10px">
+        <button type="button" class="btn primary" id="btnFinish">Selesai garis</button>
+        <button type="button" class="btn" id="btnUndo">Urungkan</button>
+        <button type="button" class="btn" id="btnClear">Hapus semua</button>
+      </div>
+    </div>
+
+    <div class="card" id="pFile" hidden>
+      <div class="field"><label for="vecFile">GeoJSON atau DXF berisi garis kontur</label><input type="file" id="vecFile" accept=".geojson,.json,.dxf"></div>
+      <p class="hint" style="margin-top:8px">Ketinggian dibaca dari properti (elevation, elev, ele, height, z, kontur) atau dari nilai Z tiap titik. Shapefile perlu diubah dulu ke GeoJSON.</p>
+      <p class="msg" id="fileMsg" style="margin-top:6px"></p>
+    </div>
+
+    <div class="mapbox" id="mapBox">
+      <canvas id="mapCv" aria-label="Peta kontur 2D"></canvas>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="card">
+      <div class="grid2">
+        <div class="field"><label for="widthM">Lebar area (m)</label><input type="number" id="widthM" min="10" step="10" value="3000"></div>
+        <div class="field"><label for="intervalIn">Interval kontur (m)</label><input type="number" id="intervalIn" min="1" step="1" value="20"></div>
+      </div>
+      <p class="hint" style="margin-top:8px">Lebar area dihitung dari skala peta. Nilai ini menentukan ukuran medan saat dijelajahi.</p>
+    </div>
+    <div class="row"><button type="button" class="btn primary" id="btnBuild" style="flex:1;padding:12px">Buat medan 3D</button></div>
+    <p class="msg" id="buildMsg"></p>
+  </section>
+
+  <section class="pane pane-view" id="paneView" aria-label="Medan 3D">
+    <div class="sec-title" style="margin-bottom:10px">Medan 3D</div>
+    <div class="view" id="viewBox">
+      <canvas id="glCv" aria-label="Medan 3D"></canvas>
+      <div class="hud" id="hud"></div>
+      <div class="glmsg" id="glMsg" hidden>Tampilan 3D tidak bisa dimuat. Periksa koneksi internet dan coba muat ulang halaman.</div>
+      <button type="button" class="exitvr" id="btnExitVR">Keluar VR</button>
+    </div>
+    <div class="legend" id="legend" style="margin-top:10px"><span id="legMin">0 m</span><div class="bar" id="legBar"></div><span id="legMax">0 m</span></div>
+
+    <div class="controls" style="margin-top:14px">
+      <div class="seg" id="modeBtns" role="group" aria-label="Mode tampilan">
+        <button type="button" data-mode="maket" aria-pressed="true">Maket (dari atas)</button>
+        <button type="button" data-mode="walk" aria-pressed="false">Jelajah (berjalan)</button>
+      </div>
+      <div class="row">
+        <button type="button" class="btn primary" id="btnVR" style="flex:1;padding:11px">Masuk VR Cardboard</button>
+      </div>
+      <p class="msg" id="vrNote"></p>
+
+      <div class="card">
+        <div class="cols">
+          <div class="ctl"><label class="lbl" for="exag">Pembesaran tinggi</label><output id="exagVal">2,0&times;</output><input type="range" id="exag" min="1" max="6" step="0.1" value="2"></div>
+          <div class="ctl"><label class="lbl" for="smooth">Kehalusan permukaan</label><output id="smoothVal">2</output><input type="range" id="smooth" min="0" max="8" step="1" value="2"></div>
+          <div class="ctl"><label class="lbl" for="water">Muka air</label><output id="waterVal">mati</output><input type="range" id="water" min="0" max="100" step="1" value="0"></div>
+        </div>
+        <div class="checks" style="margin-top:12px">
+          <label><input type="checkbox" id="contourOn" checked> Garis kontur di medan</label>
+          <label><input type="checkbox" id="tintOn" checked> Warna ketinggian</label>
+          <label><input type="checkbox" id="waterOn"> Tampilkan air</label>
+        </div>
+      </div>
+
+      <div class="card" id="walkBox" hidden>
+        <div class="grid2">
+          <div class="field"><label for="startSel">Titik awal</label><select id="startSel"><option value="center">Tengah peta</option><option value="peak">Puncak tertinggi</option><option value="valley">Titik terendah</option></select></div>
+          <div class="field"><label for="speedSel">Kecepatan</label><select id="speedSel"><option value="5">Jalan (5 m/dtk)</option><option value="20" selected>Cepat (20 m/dtk)</option><option value="80">Terbang rendah (80 m/dtk)</option></select></div>
+        </div>
+        <div class="row" style="margin-top:10px"><button type="button" class="btn" id="btnWalk" aria-pressed="false">Jalan otomatis</button></div>
+        <p class="hint" style="margin-top:8px">Geser untuk menoleh. Di komputer, tombol W A S D atau panah untuk berjalan, Shift untuk lebih cepat.</p>
+      </div>
+
+      <div class="card">
+        <div class="cols">
+          <div class="ctl"><label class="lbl" for="ipd">Jarak antar-mata</label><output id="ipdVal">63 mm</output><input type="range" id="ipd" min="50" max="75" step="1" value="63"></div>
+          <div class="ctl"><label class="lbl" for="lens">Koreksi lensa Cardboard</label><output id="lensVal">1,0</output><input type="range" id="lens" min="0" max="1.6" step="0.05" value="1"></div>
+        </div>
+      </div>
+
+      <details>
+        <summary>Cara memakai di Cardboard</summary>
+        <ol>
+          <li>Buka aplikasi ini di Chrome pada ponsel, lalu buat medan 3D.</li>
+          <li>Pilih Maket atau Jelajah, tekan Masuk VR Cardboard, izinkan sensor gerak, lalu masukkan ponsel ke Cardboard.</li>
+          <li>Maket: ketuk layar atau tombol Cardboard untuk memutar maket otomatis. Jelajah: ketuk untuk mulai atau berhenti berjalan ke arah pandangan.</li>
+          <li>Layar tampak melengkung atau kabur? Atur Jarak antar-mata dan Koreksi lensa.</li>
+        </ol>
+      </details>
+    </div>
+  </section>
+</main>
+
+<script id="core">
+//#CORE-START
+var clamp=function(x,a,b){return x<a?a:(x>b?b:x);};
+
+function estimateInterval(cs){
+  var seen={},zs=[];
+  for(var i=0;i<cs.length;i++){var z=Math.round(cs[i].z*1000)/1000;if(!seen[z]){seen[z]=1;zs.push(z);}}
+  zs.sort(function(a,b){return a-b;});
+  if(zs.length<2)return 10;
+  var d=[];for(var k=1;k<zs.length;k++)d.push(zs[k]-zs[k-1]);
+  d.sort(function(a,b){return a-b;});
+  return d[Math.floor(d.length/2)]||10;
+}
+
+function bilinear(H,nx,ny,u,v){
+  var x=clamp(u,0,1)*(nx-1),y=clamp(v,0,1)*(ny-1);
+  var i=Math.min(nx-2,Math.floor(x)),j=Math.min(ny-2,Math.floor(y));
+  var fx=x-i,fy=y-j,k=j*nx+i;
+  return (H[k]*(1-fx)+H[k+1]*fx)*(1-fy)+(H[k+nx]*(1-fx)+H[k+nx+1]*fx)*fy;
+}
+
+function rasterize(cs,nx,ny){
+  var N=nx*ny,sum=new Float32Array(N),cnt=new Uint16Array(N);
+  function put(x,y,z){var i=Math.round(x),j=Math.round(y);if(i<0||j<0||i>=nx||j>=ny)return;var k=j*nx+i;sum[k]+=z;cnt[k]++;}
+  for(var a=0;a<cs.length;a++){
+    var c=cs[a],p=c.pts;
+    if(c.dots||p.length===1){for(var q=0;q<p.length;q++)put(p[q][0]*(nx-1),p[q][1]*(ny-1),c.z);continue;}
+    for(var s=1;s<p.length;s++){
+      var x0=p[s-1][0]*(nx-1),y0=p[s-1][1]*(ny-1),x1=p[s][0]*(nx-1),y1=p[s][1]*(ny-1);
+      var n=Math.max(1,Math.ceil(Math.hypot(x1-x0,y1-y0)*2));
+      for(var t=0;t<=n;t++)put(x0+(x1-x0)*t/n,y0+(y1-y0)*t/n,c.z);
+    }
+  }
+  var fixed=new Uint8Array(N),val=new Float32Array(N);
+  for(var k=0;k<N;k++)if(cnt[k]>0){fixed[k]=1;val[k]=sum[k]/cnt[k];}
+  return {fixed:fixed,val:val};
+}
+
+function sor(h,fixed,nx,ny,iters){
+  var w=1.8;
+  for(var it=0;it<iters;it++){
+    for(var j=0;j<ny;j++){
+      var j0=j>0?j-1:0,j1=j<ny-1?j+1:ny-1;
+      for(var i=0;i<nx;i++){
+        var k=j*nx+i;if(fixed[k])continue;
+        var i0=i>0?i-1:0,i1=i<nx-1?i+1:nx-1;
+        var avg=(h[j*nx+i0]+h[j*nx+i1]+h[j0*nx+i]+h[j1*nx+i])*0.25;
+        h[k]+=w*(avg-h[k]);
+      }
+    }
+  }
+}
+
+function blur(H,nx,ny,passes){
+  var a=new Float32Array(H),b=new Float32Array(H.length);
+  for(var p=0;p<passes;p++){
+    for(var j=0;j<ny;j++){
+      var j0=j>0?j-1:0,j1=j<ny-1?j+1:ny-1;
+      for(var i=0;i<nx;i++){
+        var i0=i>0?i-1:0,i1=i<nx-1?i+1:nx-1;
+        b[j*nx+i]=(a[j0*nx+i0]+a[j0*nx+i]+a[j0*nx+i1]+a[j*nx+i0]+a[j*nx+i]+a[j*nx+i1]+a[j1*nx+i0]+a[j1*nx+i]+a[j1*nx+i1])/9;
+      }
+    }
+    var t=a;a=b;b=t;
+  }
+  return a;
+}
+
+/* Puncak dan cekungan yang seluruhnya dikelilingi satu garis kontur datar dibentuk ulang
+   supaya tidak menjadi dataran rata. */
+function fixSummits(H,fixed,nx,ny,interval){
+  var N=nx*ny,comp=new Int32Array(N).fill(-1),nc=0,stack=[];
+  for(var s=0;s<N;s++){
+    if(fixed[s]||comp[s]>=0)continue;
+    var cells=[],touches=false;comp[s]=nc;stack.push(s);
+    while(stack.length){
+      var k=stack.pop();cells.push(k);
+      var i=k%nx,j=(k-i)/nx;
+      if(i===0||j===0||i===nx-1||j===ny-1)touches=true;
+      var nb=[];if(i>0)nb.push(k-1);if(i<nx-1)nb.push(k+1);if(j>0)nb.push(k-nx);if(j<ny-1)nb.push(k+nx);
+      for(var q=0;q<nb.length;q++){var n=nb[q];if(!fixed[n]&&comp[n]<0){comp[n]=nc;stack.push(n);}}
+    }
+    var id=nc;nc++;
+    if(touches||cells.length>N*0.3||cells.length<6)continue;
+    var ring=new Set();
+    for(var c=0;c<cells.length;c++){
+      var kk=cells[c],ii=kk%nx,jj=(kk-ii)/nx;
+      for(var dj=-1;dj<=1;dj++)for(var di=-1;di<=1;di++){
+        var ni=ii+di,nj=jj+dj;if(ni<0||nj<0||ni>=nx||nj>=ny)continue;
+        var nn=nj*nx+ni;if(fixed[nn])ring.add(nn);
+      }
+    }
+    if(!ring.size)continue;
+    var rv=[],lo=Infinity,hi=-Infinity,mean=0;
+    ring.forEach(function(r){var v=H[r];rv.push(v);if(v<lo)lo=v;if(v>hi)hi=v;mean+=v;});
+    mean/=rv.length;
+    if(hi-lo>0.02*interval)continue;
+    var osum=0,ocnt=0;
+    ring.forEach(function(r){
+      var ri=r%nx,rj=(r-ri)/nx;
+      for(var dj=-1;dj<=1;dj++)for(var di=-1;di<=1;di++){
+        var ni=ri+di,nj=rj+dj;if(ni<0||nj<0||ni>=nx||nj>=ny)continue;
+        var nn=nj*nx+ni;
+        if(!fixed[nn]&&comp[nn]!==id){osum+=H[nn];ocnt++;}
+        else if(fixed[nn]&&Math.abs(H[nn]-mean)>0.02*interval){osum+=H[nn];ocnt++;}
+      }
+    });
+    if(!ocnt)continue;
+    var sign=mean>osum/ocnt?1:-1;
+    var dist=new Int32Array(N),q2=[];
+    for(var c2=0;c2<cells.length;c2++){
+      var k2=cells[c2],i2=k2%nx,j2=(k2-i2)/nx;
+      if((i2>0&&fixed[k2-1])||(i2<nx-1&&fixed[k2+1])||(j2>0&&fixed[k2-nx])||(j2<ny-1&&fixed[k2+nx])){dist[k2]=1;q2.push(k2);}
+    }
+    var head=0,dmax=1;
+    while(head<q2.length){
+      var k3=q2[head++],i3=k3%nx,j3=(k3-i3)/nx,d3=dist[k3];
+      var nb3=[];if(i3>0)nb3.push(k3-1);if(i3<nx-1)nb3.push(k3+1);if(j3>0)nb3.push(k3-nx);if(j3<ny-1)nb3.push(k3+nx);
+      for(var e=0;e<nb3.length;e++){var m=nb3[e];if(comp[m]===id&&dist[m]===0){dist[m]=d3+1;if(d3+1>dmax)dmax=d3+1;q2.push(m);}}
+    }
+    for(var c3=0;c3<cells.length;c3++){
+      var k4=cells[c3];if(dist[k4]===0)continue;
+      H[k4]=mean+sign*0.6*interval*Math.sin(Math.PI/2*dist[k4]/(dmax+1));
+    }
+  }
+}
+
+function solveDEM(cs,nx,ny,opts){
+  opts=opts||{};
+  var lv=[[nx,ny]],a=nx,b=ny;
+  while(Math.min(a,b)>20){a=Math.max(3,Math.round(a/2));b=Math.max(3,Math.round(b/2));lv.unshift([a,b]);}
+  var mean=0;for(var i=0;i<cs.length;i++)mean+=cs[i].z;mean/=Math.max(1,cs.length);
+  var H=null,px=0,py=0,fixedF=null;
+  for(var L=0;L<lv.length;L++){
+    var lx=lv[L][0],ly=lv[L][1],r=rasterize(cs,lx,ly),h=new Float32Array(lx*ly);
+    if(H){for(var j=0;j<ly;j++)for(var ii=0;ii<lx;ii++)h[j*lx+ii]=bilinear(H,px,py,ii/(lx-1),j/(ly-1));}
+    else h.fill(mean);
+    for(var k=0;k<h.length;k++)if(r.fixed[k])h[k]=r.val[k];
+    sor(h,r.fixed,lx,ly,L===0?400:(L===lv.length-1?140:70));
+    H=h;px=lx;py=ly;fixedF=r.fixed;
+  }
+  var interval=opts.interval||estimateInterval(cs);
+  if(opts.summits!==false)fixSummits(H,fixedF,nx,ny,interval);
+  var zmin=Infinity,zmax=-Infinity;
+  for(var q=0;q<H.length;q++){if(H[q]<zmin)zmin=H[q];if(H[q]>zmax)zmax=H[q];}
+  return {H:H,nx:nx,ny:ny,zmin:zmin,zmax:zmax,interval:interval};
+}
+
+function marchingContours(fn,nx,ny,interval){
+  var f=new Float32Array(nx*ny),zmin=Infinity,zmax=-Infinity;
+  for(var j=0;j<ny;j++)for(var i=0;i<nx;i++){var v=fn(i/(nx-1),j/(ny-1));f[j*nx+i]=v;if(v<zmin)zmin=v;if(v>zmax)zmax=v;}
+  var SEG={1:[[3,0]],2:[[0,1]],3:[[3,1]],4:[[1,2]],5:[[3,0],[1,2]],6:[[0,2]],7:[[3,2]],8:[[2,3]],9:[[0,2]],10:[[0,1],[2,3]],11:[[1,2]],12:[[3,1]],13:[[0,1]],14:[[3,0]]};
+  var out=[];
+  for(var L=Math.ceil(zmin/interval)*interval;L<zmax;L+=interval){
+    var lev=L+1e-6*interval,pt={},adj={};
+    function edge(c,i,j){
+      /* 0 atas, 1 kanan, 2 bawah, 3 kiri */
+      var ax,ay,bx,by,id;
+      if(c===0){ax=i;ay=j;bx=i+1;by=j;id='h'+i+','+j;}
+      else if(c===1){ax=i+1;ay=j;bx=i+1;by=j+1;id='v'+(i+1)+','+j;}
+      else if(c===2){ax=i;ay=j+1;bx=i+1;by=j+1;id='h'+i+','+(j+1);}
+      else{ax=i;ay=j;bx=i;by=j+1;id='v'+i+','+j;}
+      if(!pt[id]){
+        var fa=f[ay*nx+ax],fb=f[by*nx+bx],t=(lev-fa)/(fb-fa);
+        pt[id]=[(ax+(bx-ax)*t)/(nx-1),(ay+(by-ay)*t)/(ny-1)];
+      }
+      return id;
+    }
+    function link(p,q){(adj[p]=adj[p]||[]).push(q);(adj[q]=adj[q]||[]).push(p);}
+    for(var jj=0;jj<ny-1;jj++)for(var ii=0;ii<nx-1;ii++){
+      var A=f[jj*nx+ii]>lev?1:0,B=f[jj*nx+ii+1]>lev?2:0,C=f[(jj+1)*nx+ii+1]>lev?4:0,D=f[(jj+1)*nx+ii]>lev?8:0;
+      var cs=SEG[A|B|C|D];if(!cs)continue;
+      for(var s=0;s<cs.length;s++)link(edge(cs[s][0],ii,jj),edge(cs[s][1],ii,jj));
+    }
+    var seen={},keys=Object.keys(adj),starts=[];
+    for(var a=0;a<keys.length;a++)if(adj[keys[a]].length===1)starts.push(keys[a]);
+    for(var b=0;b<keys.length;b++)starts.push(keys[b]);
+    for(var si=0;si<starts.length;si++){
+      var s0=starts[si];if(seen[s0])continue;
+      var ch=[s0];seen[s0]=1;var cur=s0;
+      while(true){
+        var nb=adj[cur],nxt=null;
+        for(var q=0;q<nb.length;q++)if(!seen[nb[q]]){nxt=nb[q];break;}
+        if(nxt===null)break;
+        ch.push(nxt);seen[nxt]=1;cur=nxt;
+      }
+      if(ch.length>2&&adj[cur].indexOf(s0)>=0)ch.push(s0);
+      if(ch.length>=2)out.push({z:L,pts:ch.map(function(id){return pt[id];})});
+    }
+  }
+  return out;
+}
+
+var SAMPLES=[
+  {name:'Bukit dan lembah sungai',desc:'Dua bukit dipisahkan lembah sungai yang berkelok. Cocok untuk belajar membaca lereng, punggung bukit, dan lembah.',aspect:1.4,widthM:3000,interval:20,gx:150,gy:108,
+   fn:function(u,v){var g=function(cx,cy,sx,sy){return Math.exp(-(Math.pow((u-cx)/sx,2)+Math.pow((v-cy)/sy,2)));};
+     return 320+230*g(.32,.42,.17,.24)+130*g(.74,.62,.15,.2)+70*(1-v)-70*Math.exp(-Math.pow((v-(.55+.1*Math.sin(5.5*u)))/.05,2));}},
+  {name:'Dua puncak dan pelana',desc:'Dua puncak yang dihubungkan punggungan. Titik terendah di antara keduanya disebut pelana.',aspect:1.3,widthM:6000,interval:50,gx:140,gy:108,
+   fn:function(u,v){var g=function(cx,cy,sx,sy){return Math.exp(-(Math.pow((u-cx)/sx,2)+Math.pow((v-cy)/sy,2)));};
+     return 100+900*g(.3,.5,.16,.2)+700*g(.72,.45,.13,.18)+200*g(.5,.5,.3,.35);}},
+  {name:'Gunung api berkawah',desc:'Kerucut gunung api dengan kawah di puncak. Garis kontur di kawah bernilai lebih rendah dari bibir kawah.',aspect:1,widthM:8000,interval:50,gx:130,gy:130,
+   fn:function(u,v){var r=Math.hypot(u-.5,v-.5);
+     return 150+1100*Math.exp(-Math.pow(r/.2,2))-350*Math.exp(-Math.pow(r/.045,2))+20*Math.sin(18*u)*Math.sin(14*v)*Math.exp(-r*r*8);}}
+];
+function makeSample(i){
+  var s=SAMPLES[i];
+  return {contours:marchingContours(s.fn,s.gx,s.gy,s.interval),aspect:s.aspect,widthM:s.widthM,interval:s.interval};
+}
+
+function finishRaw(raw,geo,skipped){
+  if(!raw.length)throw new Error('Tidak ada garis dengan nilai ketinggian yang bisa dibaca.');
+  var minx=Infinity,maxx=-Infinity,miny=Infinity,maxy=-Infinity;
+  for(var a=0;a<raw.length;a++)for(var b=0;b<raw[a].pts.length;b++){
+    var p=raw[a].pts[b];
+    if(p[0]<minx)minx=p[0];if(p[0]>maxx)maxx=p[0];if(p[1]<miny)miny=p[1];if(p[1]>maxy)maxy=p[1];
+  }
+  var sx=1,sy=1,deg=false;
+  if(geo&&minx>=-180&&maxx<=180&&miny>=-90&&maxy<=90){deg=true;var lat0=(miny+maxy)/2*Math.PI/180;sx=111320*Math.cos(lat0);sy=110574;}
+  var wM=(maxx-minx)*sx,hM=(maxy-miny)*sy;
+  if(!(wM>0&&hM>0))throw new Error('Area garis terlalu sempit.');
+  var contours=raw.map(function(c){return {z:c.z,pts:c.pts.map(function(p){return [(p[0]-minx)/(maxx-minx),(maxy-p[1])/(maxy-miny)];})};});
+  return {contours:contours,aspect:wM/hM,widthM:wM,interval:estimateInterval(contours),skipped:skipped||0,degrees:deg};
+}
+
+function parseGeoJSON(text){
+  var g=JSON.parse(text),feats=[];
+  function walk(o){
+    if(!o)return;
+    if(o.type==='FeatureCollection')(o.features||[]).forEach(walk);
+    else if(o.type==='Feature')feats.push(o);
+    else if(o.type==='GeometryCollection')(o.geometries||[]).forEach(function(x){feats.push({geometry:x,properties:{}});});
+    else if(o.coordinates)feats.push({geometry:o,properties:{}});
+  }
+  walk(g);
+  var keys=['elevation','elev','ele','height','z','ketinggian','kontur','contour','value','altitude','alt','level','elev_m','nilai'];
+  function pickZ(props,c0){
+    if(props){
+      var lk={};for(var k in props)lk[k.toLowerCase()]=props[k];
+      for(var i=0;i<keys.length;i++){var v=lk[keys[i]];if(v!==undefined&&v!==null&&v!==''&&isFinite(Number(v)))return Number(v);}
+    }
+    if(c0&&c0.length>2&&isFinite(c0[2]))return c0[2];
+    return null;
+  }
+  var raw=[],skipped=0;
+  for(var i=0;i<feats.length;i++){
+    var f=feats[i],geom=f.geometry;if(!geom)continue;
+    var lines=[];
+    if(geom.type==='LineString')lines=[geom.coordinates];
+    else if(geom.type==='MultiLineString')lines=geom.coordinates;
+    else if(geom.type==='Polygon')lines=geom.coordinates;
+    else if(geom.type==='MultiPolygon')geom.coordinates.forEach(function(p){lines=lines.concat(p);});
+    else continue;
+    for(var l=0;l<lines.length;l++){
+      var ln=lines[l];if(!ln||ln.length<2)continue;
+      var z=pickZ(f.properties,ln[0]);
+      if(z===null){skipped++;continue;}
+      raw.push({z:z,pts:ln.map(function(p){return [p[0],p[1]];})});
+    }
+  }
+  return finishRaw(raw,true,skipped);
+}
+
+function parseDXF(text){
+  if(/^AutoCAD Binary DXF/.test(text))throw new Error('DXF biner belum didukung. Simpan ulang sebagai DXF ASCII.');
+  var L=text.split(/\r?\n/),raw=[],skipped=0,cur=null;
+  function flush(){
+    if(!cur)return;
+    var pts=cur.pts;
+    if(cur.type==='SPLINE')pts=cur.fit.length?cur.fit:cur.ctrl;
+    var z=null;
+    if(cur.type==='LWPOLYLINE')z=cur.z;
+    else if(cur.type==='LINE')z=cur.z;
+    else z=cur.vz.length?cur.vz[0]:cur.z;
+    if(pts.length>=2){
+      if(z===null)skipped++;
+      else{
+        var p=pts.map(function(q){return [q[0],q[1]];});
+        if(cur.closed&&p.length>2)p.push([p[0][0],p[0][1]]);
+        raw.push({z:z,pts:p});
+      }
+    }
+    cur=null;
+  }
+  for(var i=0;i+1<L.length;i+=2){
+    var code=parseInt(L[i],10),val=L[i+1].trim();
+    if(code===0){
+      if(val==='LWPOLYLINE'||val==='POLYLINE'||val==='LINE'||val==='SPLINE'){flush();cur={type:val,pts:[],ctrl:[],fit:[],vz:[],z:null,inV:false,closed:false};}
+      else if(val==='VERTEX'&&cur&&cur.type==='POLYLINE'){cur.inV=true;}
+      else if(val==='SEQEND'){flush();}
+      else flush();
+    }else if(cur){
+      var f=parseFloat(val);
+      if(cur.type==='LWPOLYLINE'){
+        if(code===38)cur.z=f;
+        else if(code===10)cur.pts.push([f,0]);
+        else if(code===20&&cur.pts.length)cur.pts[cur.pts.length-1][1]=f;
+        else if(code===70)cur.closed=(parseInt(val,10)&1)===1;
+      }else if(cur.type==='POLYLINE'){
+        if(cur.inV){
+          if(code===10)cur.pts.push([f,0]);
+          else if(code===20&&cur.pts.length)cur.pts[cur.pts.length-1][1]=f;
+          else if(code===30)cur.vz.push(f);
+        }else if(code===30)cur.z=f;
+        else if(code===70)cur.closed=(parseInt(val,10)&1)===1;
+      }else if(cur.type==='LINE'){
+        if(code===10)cur.pts.push([f,0]);
+        else if(code===20&&cur.pts[0])cur.pts[0][1]=f;
+        else if(code===30)cur.z=f;
+        else if(code===11)cur.pts.push([f,0]);
+        else if(code===21&&cur.pts[1])cur.pts[1][1]=f;
+      }else if(cur.type==='SPLINE'){
+        if(code===10)cur.ctrl.push([f,0]);
+        else if(code===20&&cur.ctrl.length)cur.ctrl[cur.ctrl.length-1][1]=f;
+        else if(code===30)cur.vz.push(f);
+        else if(code===11)cur.fit.push([f,0]);
+        else if(code===21&&cur.fit.length)cur.fit[cur.fit.length-1][1]=f;
+      }
+    }
+  }
+  flush();
+  return finishRaw(raw,false,skipped);
+}
+//#CORE-END
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id);};
+var css=function(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();};
+var fmt=function(x,d){return Number(x).toLocaleString('id-ID',{maximumFractionDigits:d==null?0:d,minimumFractionDigits:d==null?0:d});};
+
+/* ---------- Palet ketinggian (dipakai di peta 2D, legenda, dan shader) ---------- */
+var STOPS=[[0,[95,158,90]],[0.28,[169,192,106]],[0.52,[220,205,134]],[0.76,[182,139,94]],[1,[244,241,240]]];
+function rampRGB(t){
+  t=clamp(t,0,1);
+  for(var i=1;i<STOPS.length;i++){
+    if(t<=STOPS[i][0]){
+      var a=STOPS[i-1],b=STOPS[i],k=(t-a[0])/(b[0]-a[0]);
+      return [a[1][0]+(b[1][0]-a[1][0])*k,a[1][1]+(b[1][1]-a[1][1])*k,a[1][2]+(b[1][2]-a[1][2])*k];
+    }
+  }
+  return STOPS[STOPS.length-1][1];
+}
+function rgbCss(c){return 'rgb('+Math.round(c[0])+','+Math.round(c[1])+','+Math.round(c[2])+')';}
+function glslRamp(){
+  var v=function(c){return (c[0]/255).toFixed(4)+','+(c[1]/255).toFixed(4)+','+(c[2]/255).toFixed(4);};
+  var s='vec3 ramp(float t){ vec3 c=vec3('+v(STOPS[0][1])+');';
+  for(var i=1;i<STOPS.length;i++)s+=' c=mix(c,vec3('+v(STOPS[i][1])+'),clamp((t-'+STOPS[i-1][0].toFixed(4)+')/'+(STOPS[i][0]-STOPS[i-1][0]).toFixed(4)+',0.0,1.0));';
+  return s+' return c; }';
+}
+
+/* ---------- Data per sumber ---------- */
+var D={
+  sample:{contours:[],aspect:1.4,widthM:3000,interval:20,idx:0},
+  image:{contours:[],traced:[],capC:[],aspect:1.4,widthM:2000,interval:20,draft:[],bg:null,img:null,cap:null,elev:500,tool:'trace'},
+  file:{contours:[],aspect:1.4,widthM:2000,interval:20}
+};
+var src='sample';
+var cur=function(){return D[src];};
+var T=null; /* medan yang sudah dihitung */
+
+/* ---------- Peta 2D ---------- */
+function zRange(cs){
+  var lo=Infinity,hi=-Infinity;
+  for(var i=0;i<cs.length;i++){if(cs[i].z<lo)lo=cs[i].z;if(cs[i].z>hi)hi=cs[i].z;}
+  return [lo,hi];
+}
+function drawMap(){
+  var d=cur(),cv=$('mapCv'),box=$('mapBox');
+  var w=Math.max(200,box.clientWidth),h=Math.round(w/clamp(d.aspect,0.2,5));
+  var dpr=Math.min(2,window.devicePixelRatio||1);
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  cv.style.width=w+'px';cv.style.height=h+'px';
+  var g=cv.getContext('2d');
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle=css('--map');g.fillRect(0,0,w,h);
+  if(src==='image'&&d.bg){g.drawImage(d.bg,0,0,w,h);}
+  else{
+    g.strokeStyle=css('--rule');g.lineWidth=1;g.globalAlpha=0.6;g.beginPath();
+    for(var i=1;i<10;i++){g.moveTo(w*i/10,0);g.lineTo(w*i/10,h);g.moveTo(0,h*i/10);g.lineTo(w,h*i/10);}
+    g.stroke();g.globalAlpha=1;
+  }
+  if(src==='image'&&d.cap&&d.cap.overlay)g.drawImage(d.cap.overlay,0,0,w,h);
+  var zr=zRange(d.contours),span=Math.max(1e-6,zr[1]-zr[0]),iv=Math.max(1,d.interval);
+  for(var a=0;a<d.contours.length;a++){
+    var c=d.contours[a],col=rgbCss(rampRGB((c.z-zr[0])/span));
+    var idx=Math.abs(Math.round(c.z/iv)%5)===0;
+    if(c.dots){g.fillStyle=col;for(var q=0;q<c.pts.length;q++)g.fillRect(c.pts[q][0]*w-1,c.pts[q][1]*h-1,2.2,2.2);}
+    else{
+      g.strokeStyle=col;g.lineWidth=idx?2.2:1.3;g.lineJoin='round';g.beginPath();
+      for(var p=0;p<c.pts.length;p++){var X=c.pts[p][0]*w,Y=c.pts[p][1]*h;if(p)g.lineTo(X,Y);else g.moveTo(X,Y);}
+      g.stroke();
+    }
+  }
+  if(src==='image'&&d.draft.length){
+    g.strokeStyle=css('--accent');g.fillStyle=css('--accent');g.lineWidth=2;g.beginPath();
+    d.draft.forEach(function(p,i){if(i)g.lineTo(p[0]*w,p[1]*h);else g.moveTo(p[0]*w,p[1]*h);});
+    g.stroke();
+    d.draft.forEach(function(p){g.beginPath();g.arc(p[0]*w,p[1]*h,3,0,6.3);g.fill();});
+  }
+  if(T&&V.mode==='walk'&&cur()===D[builtFrom]){
+    var mx=(W.x/T.widthM+0.5)*w,my=(W.z/T.depthM+0.5)*h;
+    var fx=-Math.sin(V.yaw),fz=-Math.cos(V.yaw);
+    g.strokeStyle='#E5484D';g.fillStyle='#E5484D';g.lineWidth=2.5;
+    g.beginPath();g.moveTo(mx,my);g.lineTo(mx+fx*18,my+fz*18);g.stroke();
+    g.beginPath();g.arc(mx,my,5,0,6.3);g.fill();
+  }
+}
+function updateStats(){
+  var d=cur(),n=d.contours.length,s;
+  if(!n){s='Belum ada garis kontur.';}
+  else{
+    var zr=zRange(d.contours),lv={};d.contours.forEach(function(c){lv[Math.round(c.z*100)]=1;});
+    s=fmt(Object.keys(lv).length)+' tingkat ketinggian, '+fmt(zr[0])+' sampai '+fmt(zr[1])+' m';
+  }
+  if(src==='image'&&d.draft.length)s+=' | draf: '+d.draft.length+' titik';
+  $('stats').textContent=s;
+}
+function refreshContours(){
+  var d=cur();
+  if(src==='image')d.contours=d.traced.concat(d.capC);
+  updateStats();drawMap();
+}
+
+/* ---------- Pilih sumber ---------- */
+function syncInputs(){
+  var d=cur();
+  $('widthM').value=Math.round(d.widthM);
+  $('intervalIn').value=Math.round(d.interval*100)/100;
+}
+function setSrc(s){
+  src=s;
+  document.querySelectorAll('#srcBtns button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.src===s?'true':'false');});
+  $('pSample').hidden=s!=='sample';$('pImage').hidden=s!=='image';$('pFile').hidden=s!=='file';
+  syncInputs();
+  if(s==='image'){imgHint();$('elevIn').step=cur().interval;}
+  updateStats();drawMap();
+}
+document.querySelectorAll('#srcBtns button').forEach(function(b){b.addEventListener('click',function(){setSrc(b.dataset.src);});});
+
+/* contoh */
+SAMPLES.forEach(function(s,i){var o=document.createElement('option');o.value=i;o.textContent=s.name;$('sampleSel').appendChild(o);});
+function loadSample(i){
+  var s=makeSample(i),d=D.sample;
+  d.contours=s.contours;d.aspect=s.aspect;d.widthM=s.widthM;d.interval=s.interval;d.idx=i;
+  $('sampleDesc').textContent=SAMPLES[i].desc;
+  syncInputs();updateStats();drawMap();
+}
+$('sampleSel').addEventListener('change',function(){loadSample(+this.value);});
+
+$('widthM').addEventListener('input',function(){var v=+this.value;if(v>0)cur().widthM=v;});
+$('intervalIn').addEventListener('input',function(){var v=+this.value;if(v>0){cur().interval=v;if(src==='image')$('elevIn').step=v;drawMap();}});
+
+/* berkas vektor */
+$('vecFile').addEventListener('change',function(){
+  var f=this.files[0];if(!f)return;
+  var msg=$('fileMsg');msg.className='msg';msg.textContent='Membaca berkas...';
+  f.text().then(function(txt){
+    var r=/\.dxf$/i.test(f.name)?parseDXF(txt):parseGeoJSON(txt);
+    var d=D.file;d.contours=r.contours;d.aspect=r.aspect;d.widthM=Math.round(r.widthM/10)*10||r.widthM;d.interval=r.interval;
+    var note=fmt(r.contours.length)+' garis dibaca.';
+    if(r.degrees)note+=' Koordinat derajat diubah ke meter.';
+    if(r.skipped)note+=' '+fmt(r.skipped)+' garis dilewati karena tidak punya ketinggian.';
+    msg.textContent=note;
+    syncInputs();updateStats();drawMap();
+  }).catch(function(e){msg.className='msg err';msg.textContent='Gagal membaca berkas: '+e.message;});
+});
+
+/* ---------- Gambar peta ---------- */
+function imgHint(){
+  var d=D.image,t;
+  if(!d.bg)t='Pilih gambar peta terlebih dahulu.';
+  else if(d.tool==='trace')t='Klik titik-titik di sepanjang satu garis kontur, isi elevasinya, lalu tekan Selesai garis atau klik dua kali.';
+  else if(!d.cap)t='Klik tepat pada satu garis kontur untuk mengambil warnanya.';
+  else t='Klik potongan garis yang menyala merah muda untuk memberinya elevasi '+fmt(d.elev)+' m. Ubah elevasi, lalu klik potongan berikutnya.';
+  $('imgHint').textContent=t;
+}
+function setTool(t){
+  var d=D.image;d.tool=t;
+  $('toolTrace').setAttribute('aria-pressed',t==='trace'?'true':'false');
+  $('toolCapture').setAttribute('aria-pressed',t==='capture'?'true':'false');
+  $('tolRow').hidden=t!=='capture';
+  $('btnFinish').hidden=t!=='trace';
+  imgHint();
+}
+$('toolTrace').addEventListener('click',function(){setTool('trace');});
+$('toolCapture').addEventListener('click',function(){setTool('capture');});
+$('elevIn').addEventListener('input',function(){D.image.elev=+this.value||0;imgHint();});
+function bumpElev(s){var d=D.image;d.elev=Math.round((d.elev+s*d.interval)*100)/100;$('elevIn').value=d.elev;imgHint();}
+$('elevDec').addEventListener('click',function(){bumpElev(-1);});
+$('elevInc').addEventListener('click',function(){bumpElev(1);});
+
+$('imgFile').addEventListener('change',function(){
+  var f=this.files[0];if(!f)return;
+  var url=URL.createObjectURL(f),im=new Image();
+  im.onload=function(){
+    var s=Math.min(1,1000/Math.max(im.naturalWidth,im.naturalHeight));
+    var w=Math.max(1,Math.round(im.naturalWidth*s)),h=Math.max(1,Math.round(im.naturalHeight*s));
+    var c=document.createElement('canvas');c.width=w;c.height=h;
+    var x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,w,h);
+    var d=D.image;
+    d.bg=c;d.img=x.getImageData(0,0,w,h);d.aspect=w/h;d.traced=[];d.capC=[];d.draft=[];d.cap=null;d.contours=[];
+    URL.revokeObjectURL(url);
+    imgHint();refreshContours();
+  };
+  im.onerror=function(){$('imgHint').textContent='Gambar tidak bisa dibuka. Coba berkas JPG atau PNG lain.';};
+  im.src=url;
+});
+
+function dedupe(p){
+  var o=[];
+  p.forEach(function(q){var l=o[o.length-1];if(!l||Math.hypot(q[0]-l[0],q[1]-l[1])>1e-4)o.push(q);});
+  return o;
+}
+function finishDraft(){
+  var d=D.image,p=dedupe(d.draft);
+  if(p.length>=2)d.traced.push({z:d.elev,pts:p});
+  d.draft=[];refreshContours();
+}
+function buildCapture(d,x,y){
+  var w=d.img.width,h=d.img.height,data=d.img.data,o=(y*w+x)*4;
+  var r0=data[o],g0=data[o+1],b0=data[o+2],tol=+$('tolIn').value,t2=tol*tol;
+  var mask=new Uint8Array(w*h);
+  for(var k=0;k<w*h;k++){var q=k*4,dr=data[q]-r0,dg=data[q+1]-g0,db=data[q+2]-b0;if(dr*dr+dg*dg+db*db<=t2)mask[k]=1;}
+  var label=new Int32Array(w*h).fill(-1),comps=[],stack=[];
+  for(var s=0;s<w*h;s++){
+    if(!mask[s]||label[s]>=0)continue;
+    var id=comps.length,px=[];label[s]=id;stack.push(s);
+    while(stack.length){
+      var kk=stack.pop();px.push(kk);
+      var i=kk%w,j=(kk-i)/w;
+      for(var dj=-1;dj<=1;dj++)for(var di=-1;di<=1;di++){
+        if(!di&&!dj)continue;
+        var ni=i+di,nj=j+dj;if(ni<0||nj<0||ni>=w||nj>=h)continue;
+        var n=nj*w+ni;if(mask[n]&&label[n]<0){label[n]=id;stack.push(n);}
+      }
+    }
+    if(px.length<10){for(var z=0;z<px.length;z++)label[px[z]]=-2;comps.push(null);}
+    else comps.push({id:id,px:px,z:null});
+  }
+  var ov=document.createElement('canvas');ov.width=w;ov.height=h;
+  d.cap={seed:[r0,g0,b0],w:w,h:h,label:label,comps:comps,hist:[],overlay:ov};
+  paintOverlay(d);
+}
+function paintOverlay(d){
+  var c=d.cap,ctx=c.overlay.getContext('2d'),im=ctx.createImageData(c.w,c.h);
+  c.comps.forEach(function(cp){
+    if(!cp||cp.z!=null)return;
+    for(var i=0;i<cp.px.length;i++){var o=cp.px[i]*4;im.data[o]=255;im.data[o+1]=0;im.data[o+2]=190;im.data[o+3]=210;}
+  });
+  ctx.putImageData(im,0,0);
+}
+function rebuildCapC(d){
+  var c=d.cap;
+  d.capC=c.comps.filter(function(cp){return cp&&cp.z!=null;}).map(function(cp){
+    var stride=Math.max(1,Math.ceil(cp.px.length/4000)),pts=[];
+    for(var i=0;i<cp.px.length;i+=stride){var k=cp.px[i],x=k%c.w,y=(k-x)/c.w;pts.push([(x+0.5)/c.w,(y+0.5)/c.h]);}
+    return {z:cp.z,dots:true,pts:pts};
+  });
+  paintOverlay(d);
+}
+$('tolIn').addEventListener('change',function(){
+  var d=D.image;if(!d.cap)return;
+  var s=d.cap.seed,w=d.cap.w;
+  /* cari piksel dengan warna benih terdekat tidak perlu: bangun ulang dari warna benih */
+  var data=d.img.data,best=0,bd=Infinity;
+  for(var k=0;k<w*d.cap.h;k+=1){var q=k*4,dr=data[q]-s[0],dg=data[q+1]-s[1],db=data[q+2]-s[2],dd=dr*dr+dg*dg+db*db;if(dd<bd){bd=dd;best=k;if(dd===0)break;}}
+  buildCapture(d,best%w,(best-best%w)/w);d.capC=[];refreshContours();imgHint();
+});
+$('mapCv').addEventListener('click',function(e){
+  if(src!=='image')return;
+  var d=D.image;if(!d.bg)return;
+  var r=this.getBoundingClientRect(),u=clamp((e.clientX-r.left)/r.width,0,1),v=clamp((e.clientY-r.top)/r.height,0,1);
+  if(d.tool==='trace'){d.draft.push([u,v]);updateStats();drawMap();return;}
+  var w=d.img.width,h=d.img.height,x=Math.min(w-1,Math.floor(u*w)),y=Math.min(h-1,Math.floor(v*h));
+  if(!d.cap){buildCapture(d,x,y);imgHint();drawMap();return;}
+  var c=d.cap,bestId=-1,bd=1e9,R=6;
+  for(var dj=-R;dj<=R;dj++)for(var di=-R;di<=R;di++){
+    var nx=x+di,ny=y+dj;if(nx<0||ny<0||nx>=w||ny>=h)continue;
+    var lb=c.label[ny*w+nx];
+    if(lb>=0&&c.comps[lb]){var dd=di*di+dj*dj;if(dd<bd){bd=dd;bestId=lb;}}
+  }
+  if(bestId<0)return;
+  c.comps[bestId].z=d.elev;c.hist.push(bestId);rebuildCapC(d);refreshContours();
+});
+$('mapCv').addEventListener('dblclick',function(){if(src==='image'&&D.image.tool==='trace')finishDraft();});
+$('btnFinish').addEventListener('click',finishDraft);
+$('btnUndo').addEventListener('click',function(){
+  var d=D.image;
+  if(d.draft.length){d.draft.pop();}
+  else if(d.tool==='trace'&&d.traced.length){d.traced.pop();}
+  else if(d.cap&&d.cap.hist.length){var id=d.cap.hist.pop();d.cap.comps[id].z=null;rebuildCapC(d);}
+  refreshContours();
+});
+$('btnClear').addEventListener('click',function(){
+  var d=D.image;d.traced=[];d.capC=[];d.draft=[];d.cap=null;imgHint();refreshContours();
+});
+
+/* ---------- 3D ---------- */
+var V={mode:'maket',vr:false,yaw:0,pitch:0,orbit:{az:0.55,pol:1.0,r:2.4},exag:2,autoRotate:false,autoWalk:false,speed:20,ipd:0.063,lens:1};
+var W={x:0,z:0,y:0};
+var EYE=1.7;
+var builtFrom='sample';
+var renderer=null,scene,camera,camL,camR,group,terrainMesh,skirtMesh,waterMesh,mat,postScene,postCam,postMat,rtL,rtR,lights;
+var sensor={has:false,a:0,b:0,g:0,fresh:false,on:false};
+var keys={};
+
+function glReady(){return !!renderer;}
+function initGL(){
+  if(typeof THREE==='undefined'){$('glMsg').hidden=false;return false;}
+  try{renderer=new THREE.WebGLRenderer({canvas:$('glCv'),antialias:true});}
+  catch(e){$('glMsg').hidden=false;$('glMsg').textContent='Perangkat ini tidak mendukung WebGL.';return false;}
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(55,1,0.02,60);
+  camL=new THREE.PerspectiveCamera(92,1,0.02,60);
+  camR=new THREE.PerspectiveCamera(92,1,0.02,60);
+  group=new THREE.Group();scene.add(group);
+  lights=[new THREE.HemisphereLight(0xffffff,0x6b5a48,0.85),new THREE.DirectionalLight(0xffffff,0.7)];
+  lights[1].position.set(0.5,0.8,0.35);
+  lights.forEach(function(l){scene.add(l);});
+  mat=new THREE.ShaderMaterial({
+    uniforms:{uMin:{value:0},uMax:{value:1},uInt:{value:20},uContour:{value:1},uTint:{value:1},uFog:{value:0},
+      uSun:{value:new THREE.Vector3(0.5,0.8,0.35)},uLine:{value:new THREE.Color(0x5a3a22)},uSky:{value:new THREE.Color(0xd5e3e4)}},
+    vertexShader:'attribute float elev;varying float vElev;varying vec3 vN;varying vec3 vW;void main(){vElev=elev;vN=normalize(mat3(modelMatrix)*normal);vec4 wp=modelMatrix*vec4(position,1.0);vW=wp.xyz;gl_Position=projectionMatrix*viewMatrix*wp;}',
+    fragmentShader:[
+      'uniform float uMin;uniform float uMax;uniform float uInt;uniform float uContour;uniform float uTint;uniform float uFog;',
+      'uniform vec3 uSun;uniform vec3 uLine;uniform vec3 uSky;',
+      'varying float vElev;varying vec3 vN;varying vec3 vW;',
+      glslRamp(),
+      'float lineAt(float f){float w=fwidth(f);float g=abs(fract(f-0.5)-0.5)/max(w,1e-5);float l=1.0-clamp(g/1.1,0.0,1.0);return l*(1.0-smoothstep(0.25,0.7,w));}',
+      'void main(){',
+      ' float t=clamp((vElev-uMin)/max(uMax-uMin,1e-3),0.0,1.0);',
+      ' vec3 base=mix(vec3(0.80,0.83,0.80),ramp(t),uTint);',
+      ' vec3 n=normalize(vN);float d=max(dot(n,normalize(uSun)),0.0);',
+      ' vec3 col=base*(0.42+0.72*d);',
+      ' float l1=lineAt(vElev/uInt);float l5=lineAt(vElev/(uInt*5.0));',
+      ' col=mix(col,uLine,clamp(l1*0.55+l5*0.45,0.0,1.0)*uContour);',
+      ' float dist=length(vW-cameraPosition);col=mix(col,uSky,1.0-exp(-dist*uFog));',
+      ' gl_FragColor=vec4(col,1.0);}'
+    ].join('\n')
+  });
+  mat.extensions={derivatives:true};
+  terrainMesh=new THREE.Mesh(new THREE.BufferGeometry(),mat);
+  skirtMesh=new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshLambertMaterial({color:0x6b5846,side:THREE.DoubleSide}));
+  waterMesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshLambertMaterial({color:0x2f7fb8,transparent:true,opacity:0.58,depthWrite:false}));
+  waterMesh.rotation.x=-Math.PI/2;waterMesh.visible=false;
+  terrainMesh.frustumCulled=false;skirtMesh.frustumCulled=false;
+  group.add(terrainMesh);group.add(skirtMesh);group.add(waterMesh);
+
+  /* lapisan akhir: koreksi lensa Cardboard */
+  postScene=new THREE.Scene();postCam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+  var RT=THREE.WebGLRenderTarget;
+  rtL=new RT(512,512,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter});
+  rtR=new RT(512,512,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter});
+  postMat=new THREE.ShaderMaterial({
+    uniforms:{tL:{value:rtL.texture},tR:{value:rtR.texture},k1:{value:0.22},k2:{value:0.12},lens:{value:1},aspect:{value:1}},
+    vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}',
+    fragmentShader:[
+      'uniform sampler2D tL;uniform sampler2D tR;uniform float k1;uniform float k2;uniform float lens;uniform float aspect;varying vec2 vUv;',
+      'void main(){',
+      ' bool left=vUv.x<0.5;',
+      ' vec2 e=vec2(left?vUv.x*2.0:(vUv.x-0.5)*2.0,vUv.y);',
+      ' vec2 p=(e-0.5)*2.0;vec2 pa=vec2(p.x*aspect,p.y);float r2=dot(pa,pa);',
+      ' float f=1.0+lens*(k1*r2+k2*r2*r2);',
+      ' vec2 q=p*f;',
+      ' if(abs(q.x)>1.0||abs(q.y)>1.0){gl_FragColor=vec4(0.0,0.0,0.0,1.0);return;}',
+      ' vec2 se=q*0.5+0.5;',
+      ' gl_FragColor=left?texture2D(tL,se):texture2D(tR,se);}'
+    ].join('\n'),depthTest:false,depthWrite:false
+  });
+  postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),postMat));
+  applyTheme();
+  resize();
+  requestAnimationFrame(frame);
+  return true;
+}
+
+function applyTheme(){
+  drawMap();
+  if(!renderer)return;
+  var sky=new THREE.Color(css('--sky')||'#d5e3e4');
+  renderer.setClearColor(V.vr?0x000000:sky);
+  scene.background=null;
+  mat.uniforms.uSky.value.copy(sky);
+  var dark=sky.r+sky.g+sky.b<1.2;
+  mat.uniforms.uLine.value.set(dark?0x1a1208:0x5a3a22);
+  lights[0].intensity=dark?0.7:0.85;
+}
+var mq=window.matchMedia('(prefers-color-scheme: dark)');
+if(mq.addEventListener)mq.addEventListener('change',applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+function resize(){
+  if(!renderer)return;
+  var box=$('viewBox'),w=box.clientWidth,h=box.clientHeight;
+  if(!w||!h)return;
+  renderer.setPixelRatio(V.vr?Math.min(1.25,window.devicePixelRatio||1):Math.min(2,window.devicePixelRatio||1));
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h;camera.updateProjectionMatrix();
+  var pr=renderer.getPixelRatio();
+  rtL.setSize(Math.max(2,Math.floor(w*pr/2)),Math.max(2,Math.floor(h*pr)));
+  rtR.setSize(Math.max(2,Math.floor(w*pr/2)),Math.max(2,Math.floor(h*pr)));
+  camL.aspect=camR.aspect=(w/2)/h;camL.updateProjectionMatrix();camR.updateProjectionMatrix();
+  postMat.uniforms.aspect.value=(w/2)/h;
+}
+if(window.ResizeObserver){new ResizeObserver(function(){resize();}).observe($('viewBox'));new ResizeObserver(function(){drawMap();}).observe($('mapBox'));}
+else window.addEventListener('resize',function(){resize();drawMap();});
+
+/* ---------- Bangun medan ---------- */
+function groundAt(x,z){
+  if(!T)return 0;
+  var h=bilinear(T.Hs,T.nx,T.ny,x/T.widthM+0.5,z/T.depthM+0.5);
+  return (h-T.zmin)*V.exag;
+}
+function elevAt(x,z){return T?bilinear(T.Hs,T.nx,T.ny,x/T.widthM+0.5,z/T.depthM+0.5):0;}
+
+function rebuildGeometry(){
+  if(!T||!renderer)return;
+  var nx=T.nx,ny=T.ny,H=T.Hs,Wm=T.widthM,Dm=T.depthM,zmin=T.zmin,ex=V.exag;
+  var pos=new Float32Array(nx*ny*3),el=new Float32Array(nx*ny);
+  for(var j=0;j<ny;j++)for(var i=0;i<nx;i++){
+    var k=j*nx+i;
+    pos[k*3]=(i/(nx-1)-0.5)*Wm;pos[k*3+1]=(H[k]-zmin)*ex;pos[k*3+2]=(j/(ny-1)-0.5)*Dm;el[k]=H[k];
+  }
+  var idx=new Uint32Array((nx-1)*(ny-1)*6),p=0;
+  for(var j2=0;j2<ny-1;j2++)for(var i2=0;i2<nx-1;i2++){
+    var a=j2*nx+i2,b=a+1,c=a+nx,d=c+1;
+    idx[p++]=a;idx[p++]=c;idx[p++]=b;idx[p++]=b;idx[p++]=c;idx[p++]=d;
+  }
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  g.setAttribute('elev',new THREE.BufferAttribute(el,1));
+  g.setIndex(new THREE.BufferAttribute(idx,1));
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  terrainMesh.geometry.dispose();terrainMesh.geometry=g;
+
+  /* dinding samping seperti maket */
+  var base=-Math.max(0.08*(T.zmax-T.zmin)*ex,1);
+  var sp=[],si=[];
+  function strip(list){
+    var s0=sp.length/3;
+    for(var t=0;t<list.length;t++){var q=list[t];sp.push(pos[q*3],pos[q*3+1],pos[q*3+2],pos[q*3],base,pos[q*3+2]);}
+    for(var u=0;u<list.length-1;u++){var o=s0+u*2;si.push(o,o+1,o+2,o+2,o+1,o+3);}
+  }
+  var e1=[],e2=[],e3=[],e4=[];
+  for(var x=0;x<nx;x++){e1.push(x);e2.push((ny-1)*nx+x);}
+  for(var y=0;y<ny;y++){e3.push(y*nx);e4.push(y*nx+nx-1);}
+  strip(e1);strip(e2);strip(e3);strip(e4);
+  var sg=new THREE.BufferGeometry();
+  sg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(sp),3));
+  sg.setIndex(si);sg.computeVertexNormals();
+  skirtMesh.geometry.dispose();skirtMesh.geometry=sg;
+
+  waterMesh.scale.set(Wm,Dm,1);
+  updateWater();
+}
+function waterLevel(){return T?T.zmin+(+$('water').value/100)*(T.zmax-T.zmin):0;}
+function updateWater(){
+  if(!T)return;
+  var on=$('waterOn').checked,lv=waterLevel();
+  waterMesh.visible=on&&lv>T.zmin+0.01;
+  waterMesh.position.y=(lv-T.zmin)*V.exag;
+  $('waterVal').textContent=on?fmt(lv)+' m':'mati';
+}
+function applySmooth(){
+  var n=+$('smooth').value;
+  T.Hs=blur(T.Hraw,T.nx,T.ny,n);
+  var lo=Infinity,hi=-Infinity;
+  for(var i=0;i<T.Hs.length;i++){if(T.Hs[i]<lo)lo=T.Hs[i];if(T.Hs[i]>hi)hi=T.Hs[i];}
+  T.zmin=lo;T.zmax=hi;
+  mat.uniforms.uMin.value=lo;mat.uniforms.uMax.value=hi;mat.uniforms.uInt.value=Math.max(0.5,T.interval);
+  $('legMin').textContent=fmt(lo)+' m';$('legMax').textContent=fmt(hi)+' m';
+  $('legBar').style.background='linear-gradient(90deg,'+STOPS.map(function(s){return rgbCss(s[1])+' '+(s[0]*100)+'%';}).join(',')+')';
+  $('smoothVal').textContent=String(n);
+  rebuildGeometry();
+}
+function build(){
+  var d=cur(),btn=$('btnBuild'),msg=$('buildMsg');
+  var lv={};d.contours.forEach(function(c){lv[Math.round(c.z*100)]=1;});
+  if(d.contours.length<2||Object.keys(lv).length<2){msg.className='msg err';msg.textContent='Butuh minimal dua garis dengan ketinggian berbeda.';return;}
+  if(!glReady()){msg.className='msg err';msg.textContent='Tampilan 3D belum siap.';return;}
+  msg.className='msg';msg.textContent='Menghitung permukaan...';btn.disabled=true;
+  setTimeout(function(){
+    try{
+      var asp=clamp(d.aspect,0.2,5),nx,ny;
+      if(asp>=1){nx=200;ny=Math.max(24,Math.round(200/asp));}else{ny=200;nx=Math.max(24,Math.round(200*asp));}
+      var widthM=d.widthM>0?d.widthM:2000;
+      var r=solveDEM(d.contours,nx,ny,{interval:d.interval});
+      T={Hraw:r.H,Hs:r.H,nx:nx,ny:ny,widthM:widthM,depthM:widthM/asp,zmin:r.zmin,zmax:r.zmax,interval:d.interval};
+      builtFrom=src;
+      var wl=$('water');wl.value=0;
+      applySmooth();
+      setMode(V.mode,false);
+      placeStart();
+      msg.textContent='Medan 3D siap: '+fmt(T.widthM)+' x '+fmt(T.depthM)+' m, ketinggian '+fmt(T.zmin)+' sampai '+fmt(T.zmax)+' m.';
+      if(window.innerWidth<980&&builtByUser)showPane('view');
+    }catch(err){msg.className='msg err';msg.textContent='Gagal membuat medan: '+err.message;}
+    btn.disabled=false;builtByUser=false;
+  },40);
+}
+var builtByUser=false;
+$('btnBuild').addEventListener('click',function(){builtByUser=true;build();});
+
+/* ---------- Mode, posisi, kamera ---------- */
+function setMode(m,resetExag){
+  V.mode=m;
+  document.querySelectorAll('#modeBtns button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.mode===m?'true':'false');});
+  $('walkBox').hidden=m!=='walk';
+  if(resetExag){V.exag=m==='maket'?2:1;$('exag').value=V.exag;$('exagVal').textContent=fmt(V.exag,1)+'×';if(T)rebuildGeometry();}
+  if(!T||!renderer)return;
+  var big=Math.max(T.widthM,T.depthM);
+  if(m==='maket'){
+    group.scale.setScalar(1.6/big);group.position.set(0,0.95,-1.15);
+    camera.near=camL.near=camR.near=0.02;camera.far=camL.far=camR.far=60;
+    mat.uniforms.uFog.value=0;
+  }else{
+    group.scale.setScalar(1);group.position.set(0,0,0);group.rotation.y=0;
+    camera.near=camL.near=camR.near=0.3;camera.far=camL.far=camR.far=big*3;
+    mat.uniforms.uFog.value=0.6/big;
+  }
+  camera.updateProjectionMatrix();camL.updateProjectionMatrix();camR.updateProjectionMatrix();
+  V.autoWalk=false;$('btnWalk').setAttribute('aria-pressed','false');
+  if(m==='walk')placeStart();
+  drawMap();
+}
+function placeStart(){
+  if(!T)return;
+  var s=$('startSel').value,x=0,z=0;
+  if(s!=='center'){
+    var best=0,bv=s==='peak'?-Infinity:Infinity;
+    for(var k=0;k<T.Hs.length;k++){var v=T.Hs[k];if(s==='peak'?v>bv:v<bv){bv=v;best=k;}}
+    var i=best%T.nx,j=(best-i)/T.nx;
+    x=(i/(T.nx-1)-0.5)*T.widthM;z=(j/(T.ny-1)-0.5)*T.depthM;
+  }
+  W.x=x;W.z=z;W.y=groundAt(x,z);
+  var L=Math.hypot(x,z);
+  V.yaw=L>1?Math.atan2(x,z):0;V.pitch=-0.1;
+  drawMap();
+}
+document.querySelectorAll('#modeBtns button').forEach(function(b){b.addEventListener('click',function(){setMode(b.dataset.mode,true);});});
+$('startSel').addEventListener('change',placeStart);
+$('speedSel').addEventListener('change',function(){V.speed=+this.value;});
+$('btnWalk').addEventListener('click',function(){V.autoWalk=!V.autoWalk;this.setAttribute('aria-pressed',V.autoWalk?'true':'false');});
+$('exag').addEventListener('input',function(){V.exag=+this.value;$('exagVal').textContent=fmt(V.exag,1)+'×';rebuildGeometry();if(V.mode==='walk')W.y=groundAt(W.x,W.z);});
+$('smooth').addEventListener('input',function(){if(T)applySmooth();});
+$('contourOn').addEventListener('change',function(){if(renderer)mat.uniforms.uContour.value=this.checked?1:0;});
+$('tintOn').addEventListener('change',function(){if(renderer)mat.uniforms.uTint.value=this.checked?1:0;});
+$('waterOn').addEventListener('change',updateWater);
+$('water').addEventListener('input',function(){if(!$('waterOn').checked&&+this.value>0)$('waterOn').checked=true;updateWater();});
+$('ipd').addEventListener('input',function(){V.ipd=this.value/1000;$('ipdVal').textContent=this.value+' mm';});
+$('lens').addEventListener('input',function(){V.lens=+this.value;$('lensVal').textContent=fmt(V.lens,1);if(renderer)postMat.uniforms.lens.value=V.lens;});
+
+/* ---------- Sensor gerak (Cardboard) ---------- */
+var AY=null,AZ=null,Q1=null,qDev,qOff,qYaw,qHead,qZ,eTmp,vTmp,vPos,vFwd;
+function initMath(){
+  AY=new THREE.Vector3(0,1,0);AZ=new THREE.Vector3(0,0,1);Q1=new THREE.Quaternion(-Math.sqrt(0.5),0,0,Math.sqrt(0.5));
+  qDev=new THREE.Quaternion();qOff=new THREE.Quaternion();qYaw=new THREE.Quaternion();qHead=new THREE.Quaternion();qZ=new THREE.Quaternion();
+  eTmp=new THREE.Euler();vTmp=new THREE.Vector3();vPos=new THREE.Vector3();vFwd=new THREE.Vector3();
+}
+function orientAngle(){return ((screen.orientation&&typeof screen.orientation.angle==='number')?screen.orientation.angle:(window.orientation||0))*Math.PI/180;}
+function onOrient(e){
+  if(e.alpha==null&&e.beta==null)return;
+  sensor.a=e.alpha||0;sensor.b=e.beta||0;sensor.g=e.gamma||0;
+  if(!sensor.has){sensor.has=true;sensor.fresh=true;}
+}
+function devQuat(){
+  var d=Math.PI/180;
+  eTmp.set(sensor.b*d,sensor.a*d,-sensor.g*d,'YXZ');
+  qDev.setFromEuler(eTmp);qDev.multiply(Q1);
+  qDev.multiply(qZ.setFromAxisAngle(AZ,-orientAngle()));
+}
+function recenter(){
+  devQuat();
+  eTmp.setFromQuaternion(qDev,'YXZ');
+  qOff.setFromAxisAngle(AY,-eTmp.y);
+}
+function headQuat(){
+  if(V.vr&&sensor.has){
+    devQuat();qYaw.setFromAxisAngle(AY,V.yaw);
+    return qHead.copy(qYaw).multiply(qOff).multiply(qDev);
+  }
+  return qHead.setFromEuler(eTmp.set(V.pitch,V.yaw,0,'YXZ'));
+}
+function enableSensor(){
+  if(sensor.on)return Promise.resolve(true);
+  var go=function(){window.addEventListener('deviceorientation',onOrient,true);sensor.on=true;return true;};
+  if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+    return DeviceOrientationEvent.requestPermission().then(function(r){return r==='granted'?go():false;}).catch(function(){return false;});
+  }
+  if(typeof DeviceOrientationEvent==='undefined')return Promise.resolve(false);
+  return Promise.resolve(go());
+}
+
+/* ---------- Mode VR ---------- */
+var wake=null,usedFs=false;
+function enterVR(){
+  if(!T){$('vrNote').className='msg err';$('vrNote').textContent='Buat medan 3D dulu.';return;}
+  var el=$('viewBox');
+  usedFs=false;
+  if(el.requestFullscreen){try{var pr=el.requestFullscreen();usedFs=true;if(pr&&pr.catch)pr.catch(function(){usedFs=false;});}catch(e){usedFs=false;}}
+  var sp=enableSensor();
+  V.vr=true;document.body.classList.add('vr');
+  window.scrollTo(0,0);
+  if(screen.orientation&&screen.orientation.lock){try{screen.orientation.lock('landscape').catch(function(){});}catch(e){}}
+  if(navigator.wakeLock&&navigator.wakeLock.request){navigator.wakeLock.request('screen').then(function(l){wake=l;}).catch(function(){});}
+  applyTheme();
+  setTimeout(resize,50);setTimeout(resize,400);
+  sp.then(function(ok){
+    setTimeout(function(){
+      $('vrNote').className='msg';
+      $('vrNote').textContent=sensor.has?'Sensor gerak aktif. Tekan R atau ketuk dua kali untuk memusatkan arah pandang.':'Sensor gerak tidak aktif di halaman ini. Geser layar untuk menoleh. Untuk VR sungguhan, buka berkas mandiri di Chrome ponsel.';
+    },1500);
+  });
+}
+function exitVR(){
+  if(!V.vr)return;
+  V.vr=false;document.body.classList.remove('vr');
+  if(document.fullscreenElement&&document.exitFullscreen){try{document.exitFullscreen();}catch(e){}}
+  if(screen.orientation&&screen.orientation.unlock){try{screen.orientation.unlock();}catch(e){}}
+  if(wake){try{wake.release();}catch(e){}wake=null;}
+  applyTheme();setTimeout(resize,50);
+}
+$('btnVR').addEventListener('click',enterVR);
+$('btnExitVR').addEventListener('click',exitVR);
+document.addEventListener('fullscreenchange',function(){if(V.vr&&usedFs&&!document.fullscreenElement)exitVR();});
+
+/* ---------- Masukan pengguna ---------- */
+var cv=$('glCv'),ptrs=new Map(),moved=0,pinch0=0,lastTap=0,hoverT=0;
+function pdist(){var a=Array.from(ptrs.values());return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);}
+cv.addEventListener('pointerdown',function(e){
+  try{cv.setPointerCapture(e.pointerId);}catch(x){}
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});moved=0;
+  if(ptrs.size===2)pinch0=pdist();
+  cv.style.cursor='grabbing';
+});
+cv.addEventListener('pointermove',function(e){
+  var p=ptrs.get(e.pointerId);
+  if(!p){hover(e);return;}
+  var dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;moved+=Math.abs(dx)+Math.abs(dy);
+  if(ptrs.size===2){
+    var dd=pdist();
+    if(pinch0>0&&V.mode==='maket'&&!V.vr)V.orbit.r=clamp(V.orbit.r*pinch0/dd,0.5,7);
+    pinch0=dd;return;
+  }
+  if(V.mode==='maket'&&!V.vr){V.orbit.az-=dx*0.008;V.orbit.pol=clamp(V.orbit.pol-dy*0.008,0.15,1.5);}
+  else{V.yaw-=dx*0.005;if(!(V.vr&&sensor.has))V.pitch=clamp(V.pitch-dy*0.005,-1.4,1.4);}
+});
+function pend(e){
+  var had=ptrs.delete(e.pointerId);cv.style.cursor='grab';
+  if(had&&moved<6&&ptrs.size===0)tap();
+}
+cv.addEventListener('pointerup',pend);cv.addEventListener('pointercancel',pend);
+cv.addEventListener('wheel',function(e){
+  if(V.mode==='maket'&&!V.vr){e.preventDefault();V.orbit.r=clamp(V.orbit.r*Math.exp(e.deltaY*0.001),0.5,7);}
+},{passive:false});
+function tap(){
+  if(!V.vr)return;
+  var now=Date.now();
+  if(now-lastTap<350){sensor.fresh=true;lastTap=0;return;}
+  lastTap=now;
+  if(V.mode==='maket')V.autoRotate=!V.autoRotate;
+  else{V.autoWalk=!V.autoWalk;$('btnWalk').setAttribute('aria-pressed',V.autoWalk?'true':'false');}
+}
+var ray=null,ndc=null;
+function hover(e){
+  if(!T||V.vr||V.mode!=='maket'||e.pointerType==='touch')return;
+  var now=performance.now();if(now-hoverT<70)return;hoverT=now;
+  if(!ray){ray=new THREE.Raycaster();ndc=new THREE.Vector2();}
+  var r=cv.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc,camera);
+  var hit=ray.intersectObject(terrainMesh,false)[0];
+  if(hit){
+    var p=group.worldToLocal(hit.point.clone());
+    $('hud').textContent='Elevasi '+fmt(T.zmin+p.y/V.exag)+' m';
+  }
+}
+window.addEventListener('keydown',function(e){
+  var t=e.target&&e.target.tagName;if(t==='INPUT'||t==='SELECT'||t==='TEXTAREA')return;
+  var k=e.key.length===1?e.key.toLowerCase():e.key;
+  keys[k]=true;
+  if(k==='r'&&V.vr)sensor.fresh=true;
+  if(k==='Escape'){if(V.vr)exitVR();else if(src==='image'&&D.image.draft.length){D.image.draft=[];refreshContours();}}
+  if(k==='Enter'&&src==='image'&&D.image.tool==='trace'&&D.image.draft.length)finishDraft();
+  if(V.mode==='walk'&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].indexOf(k)>=0&&e.target===document.body)e.preventDefault();
+});
+window.addEventListener('keyup',function(e){var k=e.key.length===1?e.key.toLowerCase():e.key;keys[k]=false;});
+window.addEventListener('blur',function(){keys={};});
+
+/* ---------- Putaran gambar ---------- */
+var lastT=0,hudT=0,mapT=0;
+function update(dt){
+  if(V.mode==='maket'){if(V.autoRotate)group.rotation.y+=dt*0.35;return;}
+  var fwd=0,str=0;
+  if(keys.w||keys.ArrowUp)fwd+=1;if(keys.s||keys.ArrowDown)fwd-=1;
+  if(keys.d||keys.ArrowRight)str+=1;if(keys.a||keys.ArrowLeft)str-=1;
+  if(V.autoWalk)fwd+=1;
+  if(sensor.fresh&&V.vr&&sensor.has){recenter();sensor.fresh=false;}
+  if(fwd||str){
+    var q=headQuat();vFwd.set(0,0,-1).applyQuaternion(q);
+    var l=Math.hypot(vFwd.x,vFwd.z);
+    if(l>1e-4){
+      var fx=vFwd.x/l,fz=vFwd.z/l,sp=V.speed*((keys.Shift)?3:1)*dt,m=Math.max(-1,Math.min(1,fwd))
+      ;W.x+=(fx*m+(-fz)*str)*sp;W.z+=(fz*m+fx*str)*sp;
+      W.x=clamp(W.x,-T.widthM/2+1,T.widthM/2-1);W.z=clamp(W.z,-T.depthM/2+1,T.depthM/2-1);
+    }
+  }
+  var gy=groundAt(W.x,W.z);
+  W.y+=(gy-W.y)*Math.min(1,dt*8);
+}
+function placeCameras(){
+  if(V.mode==='maket'&&!V.vr){
+    var o=V.orbit,tx=group.position.x,ty=group.position.y+0.12,tz=group.position.z;
+    camera.position.set(tx+o.r*Math.sin(o.pol)*Math.sin(o.az),ty+o.r*Math.cos(o.pol),tz+o.r*Math.sin(o.pol)*Math.cos(o.az));
+    camera.lookAt(tx,ty,tz);
+    return;
+  }
+  if(sensor.fresh&&V.vr&&sensor.has){recenter();sensor.fresh=false;}
+  var q=headQuat();
+  if(V.mode==='maket')vPos.set(0,1.6,0);else vPos.set(W.x,W.y+EYE,W.z);
+  camera.position.copy(vPos);camera.quaternion.copy(q);
+  if(V.vr){
+    vTmp.set(1,0,0).applyQuaternion(q);
+    camL.position.copy(vPos).addScaledVector(vTmp,-V.ipd/2);camR.position.copy(vPos).addScaledVector(vTmp,V.ipd/2);
+    camL.quaternion.copy(q);camR.quaternion.copy(q);
+  }
+}
+function frame(now){
+  requestAnimationFrame(frame);
+  var dt=Math.min(0.1,(now-lastT)/1000||0);lastT=now;
+  if(!renderer)return;
+  if(T)update(dt);
+  placeCameras();
+  if(V.vr&&T){
+    renderer.setRenderTarget(rtL);renderer.render(scene,camL);
+    renderer.setRenderTarget(rtR);renderer.render(scene,camR);
+    renderer.setRenderTarget(null);renderer.render(postScene,postCam);
+  }else renderer.render(scene,camera);
+  if(T&&V.mode==='walk'){
+    if(now-hudT>150&&!V.vr){
+      hudT=now;
+      var br=((-V.yaw*180/Math.PI)%360+360)%360;
+      $('hud').textContent='Elevasi '+fmt(elevAt(W.x,W.z))+' m | Arah '+fmt(br)+'°';
+    }
+    if(now-mapT>250&&!V.vr){mapT=now;drawMap();}
+  }
+}
+
+/* ---------- Tab panel (ponsel) ---------- */
+function showPane(p){
+  $('stage').dataset.pane=p;
+  document.querySelectorAll('#paneTabs button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.pane===p?'true':'false');});
+  setTimeout(function(){resize();drawMap();},30);
+}
+document.querySelectorAll('#paneTabs button').forEach(function(b){b.addEventListener('click',function(){showPane(b.dataset.pane);});});
+
+/* ---------- Mulai ---------- */
+loadSample(0);
+setTool('trace');imgHint();
+if(typeof THREE!=='undefined'){initMath();}
+if(initGL()){build();}
+})();
+</script>
+</body></html>
